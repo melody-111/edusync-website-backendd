@@ -1,0 +1,83 @@
+const express = require('express');
+const router = express.Router();
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const User = require('../models/User');
+const { protect } = require('../middleware/auth');
+
+const signToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE || '7d' });
+
+// @POST /api/auth/signup
+router.post('/signup', async (req, res) => {
+  try {
+    const { name, email, password, country, adminSecret } = req.body;
+    if (!name || !email || !password)
+      return res.status(400).json({ success: false, message: 'All fields required' });
+
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ success: false, message: 'Email already registered' });
+
+    // Determine role based on secret (e.g., 'EDUSYNC_ADMIN_2024')
+    let role = 'user';
+    if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
+      role = 'admin';
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = Date.now() + 10 * 60 * 1000; // 10 mins
+
+    const user = await User.create({ 
+      name, email, password, role, 
+      country: country || 'India',
+      verificationOTP: otp,
+      otpExpiry
+    });
+
+    console.log(`📩 OTP for ${email}: ${otp}`); // For dev testing
+
+    const token = signToken(user._id);
+    res.status(201).json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, role: user.role, country: user.country, isVerified: false } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// @POST /api/auth/verify-otp
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    const user = await User.findOne({ email, verificationOTP: otp, otpExpiry: { $gt: Date.now() } });
+    
+    if (!user) return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+
+    user.isVerified = true;
+    user.verificationOTP = undefined;
+    user.otpExpiry = undefined;
+    await user.save();
+
+    res.json({ success: true, message: 'Account verified successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// @POST /api/auth/login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password)
+      return res.status(400).json({ success: false, message: 'Email and password required' });
+
+    const user = await User.findOne({ email }).select('+password');
+    if (!user || !(await user.comparePassword(password)))
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+
+    if (!user.isVerified) return res.status(401).json({ success: false, message: 'Please verify your account first', unverified: true });
+
+    const token = signToken(user._id);
+    res.json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, role: user.role, avatar: user.avatar, country: user.country } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
