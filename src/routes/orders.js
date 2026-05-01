@@ -73,4 +73,39 @@ router.put('/:id/status', protect, adminOnly, async (req, res) => {
   }
 });
 
+// @POST /api/orders/verify — verify payment signature
+router.post('/verify', protect, async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_id } = req.body;
+    const { verifyPaymentSignature } = require('../utils/paymentService');
+
+    const isValid = verifyPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
+
+    if (isValid) {
+      const order = await Order.findByIdAndUpdate(order_id, {
+        status: 'Processing',
+        'payment.status': 'Paid',
+        'payment.transactionId': razorpay_payment_id,
+        'payment.razorpayOrderId': razorpay_order_id
+      }, { new: true });
+
+      // Send Confirmation Email
+      try {
+        const sendEmail = require('../utils/sendEmail');
+        await sendEmail({
+          email: req.user.email,
+          subject: 'Order Confirmed - EduSync',
+          html: `<h3>Thank you for your order!</h3><p>Your order #${order._id} has been successfully placed.</p>`
+        });
+      } catch (e) { console.error('Confirmation email failed'); }
+
+      res.json({ success: true, message: 'Payment verified', order });
+    } else {
+      res.status(400).json({ success: false, message: 'Invalid signature' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

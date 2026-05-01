@@ -24,26 +24,32 @@ router.get('/search', async (req, res) => {
   }
 });
 
-// @GET /api/products — all products
+// @GET /api/products — all products with filtering & sorting
 router.get('/', async (req, res) => {
   try {
-    const { category, type, featured } = req.query;
-    const cacheKey = `products:${category || 'all'}:${type || 'all'}:${featured || 'all'}`;
+    const { category, type, featured, minPrice, maxPrice, sort } = req.query;
     
-    // Check Cache
-    const cached = await redis.get(cacheKey);
-    if (cached) return res.json({ success: true, count: JSON.parse(cached).length, products: JSON.parse(cached), fromCache: true });
-
     const filter = {};
     if (category) filter.category = category;
     if (type) filter.type = type;
     if (featured) filter.featured = featured === 'true';
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
+    }
 
-    const products = await Product.find(filter).sort({ createdAt: -1 });
-    
-    // Set Cache (expire in 1 hour)
-    await redis.setEx(cacheKey, 3600, JSON.stringify(products));
+    let query = Product.find(filter);
 
+    // Sorting
+    if (sort) {
+      const sortBy = sort.split(',').join(' ');
+      query = query.sort(sortBy);
+    } else {
+      query = query.sort('-createdAt');
+    }
+
+    const products = await query;
     res.json({ success: true, count: products.length, products });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

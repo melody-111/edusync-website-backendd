@@ -11,6 +11,28 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name, email, subject, message required' });
 
     const enquiry = await Enquiry.create({ name, email, phone, organization, subject, message, productInterest, quantity });
+
+    // Send Email to Admin
+    try {
+      const sendEmail = require('../utils/sendEmail');
+      await sendEmail({
+        email: process.env.ADMIN_EMAIL,
+        subject: `New Enquiry from ${name}: ${subject}`,
+        html: `
+          <h3>New Website Enquiry</h3>
+          <p><strong>Name:</strong> ${name}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Phone:</strong> ${phone || 'N/A'}</p>
+          <p><strong>Subject:</strong> ${subject}</p>
+          <p><strong>Message:</strong></p>
+          <p>${message}</p>
+        `
+      });
+    } catch (emailErr) {
+      console.error('Email failed to send:', emailErr.message);
+      // Don't fail the request if email fails
+    }
+
     res.status(201).json({ success: true, message: 'Enquiry submitted successfully', enquiry });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

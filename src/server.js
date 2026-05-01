@@ -94,6 +94,17 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'active', secure: true, time: new Date() }));
 
+// Static folder for uploads
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Upload Route
+const upload = require('./middleware/upload');
+app.post('/api/upload', upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+  res.json({ success: true, url: `/uploads/${req.file.filename}` });
+});
+
 // --- 🛣️ ROUTES ---
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/products', require('./routes/products'));
