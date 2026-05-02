@@ -43,3 +43,13 @@ services:
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: edusync-redis
+          property: connectionString
+
+  - type: redis
+    name: edusync-redis
+    plan: free
+    region: singapore
