@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: edusync-backend
+    env: node
+    plan: free
+    region: singapore # Closest to India
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 5002
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false # User must provide this in Render Dashboard
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRE
+        value: 7d
+      - key: ADMIN_SECRET
+        sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false
+      - key: CLIENT_URL
+        value: http://localhost:3000 # Default, user can update later
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_EMAIL
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: FROM_EMAIL
+        value: noreply@edusync.com
+      - key: FROM_NAME
+        value: EduSync
+      - key: ADMIN_EMAIL
+        value: admin@edusync.com
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
