@@ -7,6 +7,7 @@ const OrderSchema = new mongoose.Schema({
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
     name: String,
     price: Number,
+    currency: { type: String, default: 'INR' },
     quantity: Number,
     variant: String,
     image: String
@@ -19,19 +20,27 @@ const OrderSchema = new mongoose.Schema({
     city: String,
     state: String,
     pincode: String,
-    country: { type: String, default: 'India' }
+    country: { type: String, required: true }
   },
   payment: {
-    method: { type: String, enum: ['razorpay', 'cod', 'card'], default: 'razorpay' },
-    status: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
-    razorpayOrderId: String,
-    razorpayPaymentId: String,
+    method: { 
+      type: String, 
+      enum: ['card', 'upi', 'netbanking', 'razorpay', 'paypal', 'cod'], 
+      required: true 
+    },
+    status: { 
+      type: String, 
+      enum: ['pending', 'paid', 'failed', 'refunded'], 
+      default: 'pending' 
+    },
+    transactionId: String,
     paidAt: Date
   },
   subtotal: Number,
   tax: Number,
   shipping: { type: Number, default: 0 },
   total: { type: Number, required: true },
+  currency: { type: String, default: 'INR' },
   status: {
     type: String,
     enum: ['placed', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'],
@@ -42,7 +51,6 @@ const OrderSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Auto-generate order number
 OrderSchema.pre('save', async function(next) {
   if (!this.orderNumber) {
     const count = await mongoose.model('Order').countDocuments();

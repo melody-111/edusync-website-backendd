@@ -41,15 +41,29 @@ router.post('/create', async (req, res) => {
   }
 });
 
-// @GET /api/admin/dashboard — stats
+// @GET /api/admin/dashboard — high-fidelity stats
 router.get('/dashboard', protect, adminOnly, async (req, res) => {
   try {
-    const [totalOrders, totalUsers, totalProducts, totalEnquiries, recentOrders] = await Promise.all([
+    const [
+      totalOrders, 
+      totalUsers, 
+      totalProducts, 
+      totalEnquiries, 
+      recentOrders,
+      statusStats,
+      stockStats
+    ] = await Promise.all([
       Order.countDocuments(),
       User.countDocuments({ role: 'user' }),
       Product.countDocuments(),
       Enquiry.countDocuments({ status: 'new' }),
-      Order.find().sort({ createdAt: -1 }).limit(5).populate('user', 'name email')
+      Order.find().sort({ createdAt: -1 }).limit(10).populate('user', 'name email'),
+      Order.aggregate([
+        { $group: { _id: "$status", count: { $sum: 1 } } }
+      ]),
+      Product.aggregate([
+        { $group: { _id: "$inStock", count: { $sum: 1 } } }
+      ])
     ]);
 
     const revenue = await Order.aggregate([
@@ -57,14 +71,29 @@ router.get('/dashboard', protect, adminOnly, async (req, res) => {
       { $group: { _id: null, total: { $sum: '$total' } } }
     ]);
 
+    // Format status stats for easy consumption
+    const formattedStatuses = {};
+    statusStats.forEach(s => formattedStatuses[s._id] = s.count);
+
     res.json({
       success: true,
       stats: {
         totalOrders,
-        totalUsers,
+        totalStudents: totalUsers,
         totalProducts,
         newEnquiries: totalEnquiries,
-        totalRevenue: revenue[0]?.total || 0
+        totalRevenue: revenue[0]?.total || 0,
+        orderStatus: {
+          pending: formattedStatuses['placed'] || 0,
+          processing: formattedStatuses['processing'] || 0,
+          shipped: formattedStatuses['shipped'] || 0,
+          delivered: formattedStatuses['delivered'] || 0,
+          installed: formattedStatuses['installed'] || 0,
+        },
+        inventory: {
+          inStock: stockStats.find(s => s._id === true)?.count || 0,
+          outOfStock: stockStats.find(s => s._id === false)?.count || 0
+        }
       },
       recentOrders
     });
@@ -88,6 +117,20 @@ router.delete('/users/:id', protect, adminOnly, async (req, res) => {
   try {
     await User.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'User deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// @GET /api/admin/invoices — view all invoices (ADMIN ONLY)
+router.get('/invoices', protect, adminOnly, async (req, res) => {
+  try {
+    const invoices = await require('../models/Invoice').find()
+      .sort({ createdAt: -1 })
+      .populate('user', 'name email')
+      .populate('order', 'orderNumber status');
+      
+    res.json({ success: true, count: invoices.length, invoices });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

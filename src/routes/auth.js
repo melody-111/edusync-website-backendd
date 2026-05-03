@@ -17,7 +17,7 @@ router.post('/signup', async (req, res) => {
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ success: false, message: 'Email already registered' });
 
-    // Determine role based on secret (e.g., 'EDUSYNC_ADMIN_2024')
+    // Determine role based on secret
     let role = 'user';
     if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
       role = 'admin';
@@ -34,10 +34,22 @@ router.post('/signup', async (req, res) => {
       otpExpiry
     });
 
-    console.log(`📩 OTP for ${email}: ${otp}`); // For dev testing
+    console.log(`📩 OTP for ${email}: ${otp}`);
 
     const token = signToken(user._id);
-    res.status(201).json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, role: user.role, country: user.country, isVerified: false } });
+    res.status(201).json({ 
+      success: true, 
+      token, 
+      user: { 
+        id: user._id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role, 
+        region: user.region,
+        country: user.country, 
+        isVerified: false 
+      } 
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

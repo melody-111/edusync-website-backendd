@@ -24,10 +24,17 @@ router.get('/search', async (req, res) => {
   }
 });
 
-// @GET /api/products — all products with filtering & sorting
+// @GET /api/products — all products with filtering & sorting (CACHED)
 router.get('/', async (req, res) => {
   try {
     const { category, type, featured, minPrice, maxPrice, sort } = req.query;
+    const cacheKey = `products_list_${JSON.stringify(req.query)}`;
+
+    // Try to get from Redis cache
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) return res.json({ success: true, fromCache: true, ...JSON.parse(cached) });
+    }
     
     const filter = {};
     if (category) filter.category = category;
@@ -50,7 +57,14 @@ router.get('/', async (req, res) => {
     }
 
     const products = await query;
-    res.json({ success: true, count: products.length, products });
+    const responseData = { count: products.length, products };
+
+    // Save to Redis (expire in 10 mins)
+    if (redis) {
+      await redis.setEx(cacheKey, 600, JSON.stringify(responseData));
+    }
+
+    res.json({ success: true, ...responseData });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
